@@ -6,6 +6,7 @@ import { api } from './generated/client.js';
 import { z } from 'zod';
 import { readFileSync } from 'fs';
 import path from 'path';
+import * as nodePath from 'node:path';
 import { fileURLToPath } from 'url';
 import { TOOL_CATEGORIES } from './tool-categories.js';
 import { getRequestTokens } from './request-context.js';
@@ -151,8 +152,8 @@ async function executeGraphTool(
             isError: true,
           };
         }
-        const fileName = explicitName ?? path.basename(filePath);
-        const ext = path.extname(filePath).toLowerCase();
+        const fileName = explicitName ?? nodePath.basename(filePath);
+        const ext = nodePath.extname(filePath).toLowerCase();
         const inferredType =
           ext === '.pdf' ? 'application/pdf' :
           ext === '.png' ? 'image/png' :
@@ -176,6 +177,13 @@ async function executeGraphTool(
         delete params.is_inline;
         delete params.attachment_name;
         delete params.content_type;
+        // Graph echoes contentBytes (full base64) back in the response by default.
+        // When the caller passed file_path they almost certainly don't need that echo,
+        // and including it would blow up downstream context. Auto-trim unless the
+        // caller explicitly asked for the full response by setting excludeResponse=false.
+        if (params.excludeResponse === undefined) {
+          params.excludeResponse = true;
+        }
         logger.info(
           `add-mail-attachment: loaded ${fileName} from ${filePath} (${sizeBytes} bytes, ${inferredType})`
         );
