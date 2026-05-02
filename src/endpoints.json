@@ -131,7 +131,7 @@
     "method": "post",
     "toolName": "add-mail-attachment",
     "scopes": ["Mail.ReadWrite"],
-    "llmTip": "Max 3MB. Body requires @odata.type: {\"@odata.type\": \"#microsoft.graph.fileAttachment\", \"name\": \"file.pdf\", \"contentBytes\": \"<base64>\"}."
+    "llmTip": "Max 3MB. Two ways to pass the file: (1) `file_path` (Bryanlabs fork extension) — absolute path on disk; the server reads it and base64-encodes locally, no bytes through your context. (2) `body` — full Graph fileAttachment shape: {\"@odata.type\": \"#microsoft.graph.fileAttachment\", \"name\": \"file.pdf\", \"contentBytes\": \"<base64>\"}. Prefer file_path."
   },
   {
     "pathPattern": "/me/messages/{message-id}/attachments/createUploadSession",

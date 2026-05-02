@@ -126,6 +126,73 @@ async function executeGraphTool(
 ): Promise<CallToolResult> {
   logger.info(`Tool ${tool.alias} called with params: ${JSON.stringify(params)}`);
   try {
+    // file_path shortcut for add-mail-attachment: read the file from disk inside this
+    // process and base64-encode it, so callers don't have to ship the bytes through
+    // their own context. The file_path stays on disk; only the resulting body crosses
+    // the JSON-RPC boundary on its way to Graph.
+    if (tool.alias === 'add-mail-attachment' && typeof params.file_path === 'string') {
+      const filePath = params.file_path as string;
+      const isInline = params.is_inline === true;
+      const explicitName = typeof params.attachment_name === 'string' ? params.attachment_name : undefined;
+      const explicitContentType = typeof params.content_type === 'string' ? params.content_type : undefined;
+      try {
+        const fileBuffer = readFileSync(filePath);
+        const sizeBytes = fileBuffer.length;
+        if (sizeBytes > 3 * 1024 * 1024) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: `File too large for add-mail-attachment (${sizeBytes} bytes). The 3MB Graph limit applies. Use create-mail-attachment-upload-session for larger files.`,
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+        const fileName = explicitName ?? path.basename(filePath);
+        const ext = path.extname(filePath).toLowerCase();
+        const inferredType =
+          ext === '.pdf' ? 'application/pdf' :
+          ext === '.png' ? 'image/png' :
+          ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' :
+          ext === '.gif' ? 'image/gif' :
+          ext === '.txt' ? 'text/plain' :
+          ext === '.csv' ? 'text/csv' :
+          ext === '.html' || ext === '.htm' ? 'text/html' :
+          ext === '.json' ? 'application/json' :
+          ext === '.docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' :
+          ext === '.xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' :
+          'application/octet-stream';
+        params.body = {
+          '@odata.type': '#microsoft.graph.fileAttachment',
+          name: fileName,
+          contentType: explicitContentType ?? inferredType,
+          contentBytes: fileBuffer.toString('base64'),
+          isInline,
+        };
+        delete params.file_path;
+        delete params.is_inline;
+        delete params.attachment_name;
+        delete params.content_type;
+        logger.info(
+          `add-mail-attachment: loaded ${fileName} from ${filePath} (${sizeBytes} bytes, ${inferredType})`
+        );
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error: `Failed to read file_path '${filePath}': ${(err as Error).message}`,
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
     // Resolve account-specific token if `account` parameter is provided (or auto-resolve for single account).
     // Skip in OAuth/HTTP mode — let the request context drive token selection via GraphClient.
     // Also skip when a request-context token exists (HTTP/OAuth flow where token comes from middleware).
@@ -642,6 +709,29 @@ export function registerGraphTools(
             `Required when multiple accounts are configured. ` +
             `Use the list-accounts tool to discover all currently available accounts.`
         )
+        .optional();
+    }
+
+    // file_path shortcut for add-mail-attachment: lets callers pass an absolute path
+    // instead of base64 contentBytes, keeping the file bytes out of the caller's context.
+    if (tool.alias === 'add-mail-attachment') {
+      paramSchema['file_path'] = z
+        .string()
+        .describe(
+          'Absolute path to a local file. Bryanlabs fork extension. When set, the server reads the file and constructs the fileAttachment body, so the caller does not need to ship base64 contentBytes through its context. Mutually exclusive with `body`. Subject to the same 3MB Graph cap.'
+        )
+        .optional();
+      paramSchema['attachment_name'] = z
+        .string()
+        .describe('Optional display name for the attachment. Defaults to the file basename.')
+        .optional();
+      paramSchema['content_type'] = z
+        .string()
+        .describe('Optional MIME type. Inferred from extension when omitted.')
+        .optional();
+      paramSchema['is_inline'] = z
+        .boolean()
+        .describe('Optional. Set true to mark as an inline attachment (e.g., embedded image).')
         .optional();
     }
 
