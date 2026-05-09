@@ -295,11 +295,13 @@ class MicrosoftGraphServer {
           const body = req.body;
           logger.info('Client registration request', { body });
 
-          const clientId = `mcp-client-${Date.now()}`;
+          const clientId =
+            process.env.MS365_MCP_DCR_CLIENT_ID ||
+            req.get('host')?.replace(/[^a-zA-Z0-9._~-]/g, '-') ||
+            'ms-365-mcp-client';
 
           res.status(201).json({
             client_id: clientId,
-            client_id_issued_at: Math.floor(Date.now() / 1000),
             redirect_uris: body.redirect_uris || [],
             grant_types: body.grant_types || ['authorization_code', 'refresh_token'],
             response_types: body.response_types || ['code'],
