@@ -4,7 +4,7 @@ import GraphClient from './graph-client.js';
 import AuthManager from './auth.js';
 import { api } from './generated/client.js';
 import { z } from 'zod';
-import { readFileSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import * as nodePath from 'node:path';
 import { fileURLToPath } from 'url';
@@ -127,6 +127,25 @@ async function executeGraphTool(
 ): Promise<CallToolResult> {
   logger.info(`Tool ${tool.alias} called with params: ${JSON.stringify(params)}`);
   try {
+    let attachmentOutputPath: string | undefined;
+    if (tool.alias === 'get-mail-attachment' && typeof params.output_path === 'string') {
+      attachmentOutputPath = params.output_path as string;
+      delete params.output_path;
+      if (!nodePath.isAbsolute(attachmentOutputPath)) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error: 'output_path must be an absolute local path',
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+
     // file_path shortcut for add-mail-attachment: read the file from disk inside this
     // process and base64-encode it, so callers don't have to ship the bytes through
     // their own context. The file_path stays on disk; only the resulting body crosses
@@ -462,6 +481,49 @@ async function executeGraphTool(
 
     let response = await graphClient.graphRequest(path, options);
 
+    if (attachmentOutputPath && response?.content?.[0]?.text && !response.isError) {
+      try {
+        const attachment = JSON.parse(response.content[0].text);
+        if (typeof attachment.contentBytes !== 'string') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error:
+                    'get-mail-attachment output_path requested, but Graph response did not include contentBytes. Do not set select, or include contentBytes.',
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const fileBuffer = Buffer.from(attachment.contentBytes, 'base64');
+        mkdirSync(nodePath.dirname(attachmentOutputPath), { recursive: true });
+        writeFileSync(attachmentOutputPath, fileBuffer);
+        delete attachment.contentBytes;
+        attachment.output_path = attachmentOutputPath;
+        attachment.bytes_written = fileBuffer.length;
+        response.content[0].text = JSON.stringify(attachment);
+        logger.info(
+          `get-mail-attachment: wrote ${fileBuffer.length} bytes to ${attachmentOutputPath}`
+        );
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error: `Failed to write get-mail-attachment output_path '${attachmentOutputPath}': ${(err as Error).message}`,
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+
     const fetchAllPages = params.fetchAllPages === true;
     if (fetchAllPages && response?.content?.[0]?.text) {
       try {
@@ -740,6 +802,17 @@ export function registerGraphTools(
       paramSchema['is_inline'] = z
         .boolean()
         .describe('Optional. Set true to mark as an inline attachment (e.g., embedded image).')
+        .optional();
+    }
+
+    // output_path shortcut for get-mail-attachment: writes Graph's contentBytes to disk
+    // inside the MCP server and returns metadata only, keeping base64 out of the caller.
+    if (tool.alias === 'get-mail-attachment') {
+      paramSchema['output_path'] = z
+        .string()
+        .describe(
+          'Absolute path where the server should write the downloaded file attachment. Bryanlabs fork extension. When set, the server decodes contentBytes to this local path and suppresses contentBytes in the response.'
+        )
         .optional();
     }
 

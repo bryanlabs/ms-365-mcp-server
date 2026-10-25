@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { z } from 'zod';
+import { mkdtempSync, readFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 /**
  * We test executeGraphTool logic by importing it indirectly through registerGraphTools.
@@ -580,6 +583,74 @@ describe('graph-tools', () => {
       const [, options] = graphClient.graphRequest.mock.calls[0];
       const prefer = options.headers['Prefer'];
       expect(prefer === undefined || !prefer.includes('outlook.body-content-type')).toBe(true);
+    });
+  });
+
+  describe('mail attachment local file shortcuts', () => {
+    it('should expose output_path for get-mail-attachment and write contentBytes to disk', async () => {
+      const endpoint = makeEndpoint({
+        alias: 'get-mail-attachment',
+        method: 'get',
+        path: '/me/messages/:messageId/attachments/:attachmentId',
+        parameters: [
+          { name: 'messageId', type: 'Path', schema: z.string() },
+          { name: 'attachmentId', type: 'Path', schema: z.string() },
+        ],
+      });
+      const config = makeConfig({
+        toolName: 'get-mail-attachment',
+        method: 'get',
+        pathPattern: '/me/messages/{message-id}/attachments/{attachment-id}',
+      });
+      mockEndpoints.push(endpoint);
+      mockEndpointsJson = [config];
+
+      const graphClient = createMockGraphClient([
+        {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id: 'att-1',
+                name: 'letter.pdf',
+                contentType: 'application/pdf',
+                size: 5,
+                contentBytes: Buffer.from('hello').toString('base64'),
+              }),
+            },
+          ],
+        },
+      ]);
+
+      const server = createMockServer();
+      const { registerGraphTools } = await loadModule();
+      registerGraphTools(server as any, graphClient as any);
+
+      const tool = server.tools.get('get-mail-attachment');
+      expect(tool).toBeDefined();
+      expect(tool!.schema['output_path']).toBeDefined();
+
+      const tempDir = mkdtempSync(join(tmpdir(), 'ms365-attachment-'));
+      const outputPath = join(tempDir, 'letter.pdf');
+      try {
+        const result = await tool!.handler({
+          messageId: 'message-1',
+          attachmentId: 'attachment-1',
+          output_path: outputPath,
+        });
+
+        const [requestedPath] = graphClient.graphRequest.mock.calls[0];
+        expect(requestedPath).toContain('/me/messages/message-1/attachments/attachment-1');
+        expect(requestedPath).not.toContain('output_path');
+        expect(readFileSync(outputPath, 'utf8')).toBe('hello');
+
+        const parsed = JSON.parse(result.content[0].text);
+        expect(parsed.contentBytes).toBeUndefined();
+        expect(parsed.output_path).toBe(outputPath);
+        expect(parsed.bytes_written).toBe(5);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
     });
   });
 });

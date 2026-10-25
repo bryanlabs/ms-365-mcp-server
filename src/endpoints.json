@@ -94,6 +94,20 @@
     "llmTip": "CRITICAL: Do not try to guess the email address of the recipients. Use the list-users tool to find the email address of the recipients."
   },
   {
+    "pathPattern": "/users/{user-id}/messages/{message-id}",
+    "method": "patch",
+    "toolName": "update-shared-mailbox-message",
+    "workScopes": ["Mail.ReadWrite.Shared"],
+    "llmTip": "Update a message in a shared mailbox. userId is the shared mailbox UPN (e.g. hello@bryanlabs.net). Commonly used to set isRead=true when triaging shared-mailbox mail."
+  },
+  {
+    "pathPattern": "/users/{user-id}/messages/{message-id}/move",
+    "method": "post",
+    "toolName": "move-shared-mailbox-message",
+    "workScopes": ["Mail.ReadWrite.Shared"],
+    "llmTip": "Move a message inside a shared mailbox. userId is the shared mailbox UPN (e.g. hello@bryanlabs.net); destinationId accepts a folder ID or well-known name (inbox, drafts, sentitems, deleteditems, junkemail, archive)."
+  },
+  {
     "pathPattern": "/users",
     "method": "get",
     "toolName": "list-users",
