@@ -34,12 +34,12 @@
   },
   "dependencies": {
     "@azure/msal-node": "^3.8.0",
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.32.0",
     "@toon-format/toon": "^0.8.0",
     "commander": "^11.1.0",
     "dotenv": "^17.0.1",
     "express": "^5.2.1",
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^4.3.2",
     "open": "^11.0.0",
     "winston": "^3.17.0",
     "zod": "^3.24.2",
@@ -51,7 +51,7 @@
     "keytar": "^7.9.0"
   },
   "devDependencies": {
-    "@redocly/cli": "^2.11.1",
+    "@redocly/cli": "^2.33.2",
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^11.0.3",
@@ -76,5 +76,37 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/softeria/ms-365-mcp-server.git"
+  },
+  "overrides": {
+    "@humanfs/node": "0.16.8",
+    "@opentelemetry/core@^2": "2.8.0",
+    "@redocly/respect-core": "2.51.1",
+    "@vitest/mocker": "4.1.12",
+    "body-parser": "2.4.0",
+    "brace-expansion@^1": "1.1.21",
+    "brace-expansion@^2": "2.1.7",
+    "brace-expansion@^5": "5.0.12",
+    "dompurify": "3.4.17",
+    "esbuild@>=0.27 <0.29": "0.28.1",
+    "fast-uri@^3": "3.1.9",
+    "fast-xml-builder": "1.1.7",
+    "fast-xml-parser@^5": "5.7.0",
+    "glob@>=10 <14": "14.0.2",
+    "handlebars": "4.7.10",
+    "hono": "4.13.11",
+    "ip-address@^10": "10.7.4",
+    "minimatch@>=9 <12": "11.0.1",
+    "nanoid@^3": "3.3.18",
+    "npm": "11.21.1",
+    "picomatch@^4": "4.0.4",
+    "postcss@^8": "8.5.23",
+    "proxy-addr": "2.0.8",
+    "qs": "6.16.1",
+    "source-map-js": "1.2.2",
+    "tinypool": "2.1.2",
+    "undici@^6": "6.29.1",
+    "undici@^7": "7.30.1",
+    "vite@^7": "7.3.7",
+    "ws@^7": "7.5.11"
   }
 }
