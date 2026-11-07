@@ -23,7 +23,9 @@ vi.mock('commander', () => {
   }
 
   return {
-    Command: vi.fn(() => mockCommand),
+    Command: vi.fn(function () {
+      return mockCommand;
+    }),
     Option: MockOption,
   };
 });
